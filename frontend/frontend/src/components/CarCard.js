@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaHeart, FaRegHeart, FaGasPump, FaCog, FaTachometerAlt, FaCar } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
-import api from '../api';
+import api, { BASE_URL } from '../api';
 import { useToast } from './Toast';
 
 function CarCard({ car, isFavorited = false, onFavoriteChange }) {
@@ -37,7 +37,7 @@ function CarCard({ car, isFavorited = false, onFavoriteChange }) {
     };
 
     const imageUrl = car.primary_image
-        ? (car.primary_image.startsWith('http') ? car.primary_image : `http://localhost:5000${car.primary_image}`)
+        ? (car.primary_image.startsWith('http') ? car.primary_image : `${BASE_URL}${car.primary_image}`)
         : null;
 
     return (
