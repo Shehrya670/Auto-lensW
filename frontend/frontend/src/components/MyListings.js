@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from './Toast';
-import api from '../api';
+import api, { BASE_URL } from '../api';
 import { FaPlus, FaTrash, FaCheckCircle, FaCar } from 'react-icons/fa';
 
 function MyListings() {
@@ -52,7 +52,7 @@ function MyListings() {
     };
 
     const getImageUrl = (url) => url
-        ? (url.startsWith('http') ? url : `http://localhost:5000${url}`)
+        ? (url.startsWith('http') ? url : `${BASE_URL}${url}`)
         : null;
 
     const statusClass = { available: 'available', sold: 'sold', pending: 'pending' };

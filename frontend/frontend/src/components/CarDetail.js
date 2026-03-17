@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FaArrowLeft, FaPhone, FaEnvelope, FaHeart, FaRegHeart, FaCar, FaGasPump, FaCog, FaTachometerAlt, FaCalendar, FaPalette, FaCheckCircle } from 'react-icons/fa';
-import api from '../api';
+import api, { BASE_URL } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from './Toast';
 
@@ -75,7 +75,7 @@ function CarDetail() {
 
     const images = car.images && car.images.length > 0 ? car.images : [];
     const getImageUrl = (url) => url
-        ? (url.startsWith('http') ? url : `http://localhost:5000${url}`)
+        ? (url.startsWith('http') ? url : `${BASE_URL}${url}`)
         : null;
 
     const sellerInitial = (car.seller_name || 'S')[0].toUpperCase();

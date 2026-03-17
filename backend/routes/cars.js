@@ -1,31 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 const pool = require('../db');
 const { authMiddleware } = require('../middleware/auth');
+const { uploadCarImages, cloudinary, getPublicIdFromUrl } = require('../cloudinary');
 
-// ─── Multer setup ────────────────────────────────────────────────────────────
-const uploadDir = path.join(__dirname, '..', 'public', 'uploads');
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-
-const storage = multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, uploadDir),
-    filename: (_req, file, cb) => {
-        const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-        cb(null, unique + path.extname(file.originalname));
-    },
-});
-
-const upload = multer({
-    storage,
-    limits: { fileSize: 8 * 1024 * 1024 }, // 8 MB
-    fileFilter: (_req, file, cb) => {
-        if (file.mimetype.startsWith('image/')) cb(null, true);
-        else cb(new Error('Only image files are allowed'));
-    },
-});
+const upload = uploadCarImages;
 
 // ─── GET /api/cars — list with filters ───────────────────────────────────────
 router.get('/', async (req, res) => {
@@ -195,7 +174,7 @@ router.post('/:id/images', authMiddleware, upload.array('images', 10), async (re
 
         const inserted = [];
         for (let i = 0; i < req.files.length; i++) {
-            const imageUrl = `/uploads/${req.files[i].filename}`;
+            const imageUrl = req.files[i].path; // Cloudinary URL
             const isPrimary = noneExist && i === 0;
             const row = await pool.query(
                 'INSERT INTO car_images (car_id, image_url, is_primary) VALUES ($1,$2,$3) RETURNING *',
@@ -266,11 +245,13 @@ router.delete('/:id', authMiddleware, async (req, res) => {
         if (carCheck.rows[0].user_id !== req.user.id)
             return res.status(403).json({ success: false, error: 'Not authorized' });
 
-        // Delete uploaded images from disk
+        // Delete images from Cloudinary
         const images = await pool.query('SELECT image_url FROM car_images WHERE car_id = $1', [id]);
         for (const img of images.rows) {
-            const filePath = path.join(__dirname, '..', 'public', img.image_url);
-            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+            const publicId = getPublicIdFromUrl(img.image_url);
+            if (publicId) {
+                await cloudinary.uploader.destroy(publicId).catch(() => {});
+            }
         }
 
         await pool.query('DELETE FROM cars WHERE id = $1', [id]);

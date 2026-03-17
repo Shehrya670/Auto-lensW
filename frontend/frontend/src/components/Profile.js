@@ -1,10 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from './Toast';
-import api from '../api';
+import api, { BASE_URL } from '../api';
 import { FaCamera } from 'react-icons/fa';
-
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 function Profile() {
     const { user, loading, refreshMe, updateProfile } = useAuth();
@@ -19,7 +17,7 @@ function Profile() {
     useEffect(() => {
         if (user) {
             setForm({ name: user.name||'', phone: user.phone||'', location: user.location||'', bio: user.bio||'' });
-            setAvatarPreview(user.avatar_url ? `${API_BASE}${user.avatar_url}` : null);
+            setAvatarPreview(user.avatar_url ? `${BASE_URL}${user.avatar_url}` : null);
         }
     }, [user]);
 
@@ -77,7 +75,7 @@ function Profile() {
         } catch (err) {
             toast.error(err.response?.data?.message || 'Upload failed');
             // Revert preview
-            setAvatarPreview(user.avatar_url ? `${API_BASE}${user.avatar_url}` : null);
+            setAvatarPreview(user.avatar_url ? `${BASE_URL}${user.avatar_url}` : null);
         }
         setUploading(false);
     };

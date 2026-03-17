@@ -3,25 +3,8 @@ const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 const pool = require('../db');
-
-// Multer config for avatar uploads
-const avatarStorage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, path.join(__dirname, '..', 'public', 'uploads')),
-    filename: (req, file, cb) => cb(null, `avatar-${req.user.id}-${Date.now()}${path.extname(file.originalname)}`)
-});
-const avatarUpload = multer({
-    storage: avatarStorage,
-    limits: { fileSize: 5 * 1024 * 1024 },
-    fileFilter: (req, file, cb) => {
-        const allowed = /jpeg|jpg|png|webp|gif/;
-        const ok = allowed.test(path.extname(file.originalname).toLowerCase()) && allowed.test(file.mimetype.split('/')[1]);
-        cb(ok ? null : new Error('Only image files are allowed'), ok);
-    }
-});
+const { uploadAvatar, cloudinary, getPublicIdFromUrl } = require('../cloudinary');
 
 const { authMiddleware } = require('../middleware/auth');
 
@@ -325,7 +308,7 @@ router.put(
 // @desc    Upload profile avatar image
 // @access  Private
 router.post('/avatar', authMiddleware, (req, res) => {
-    avatarUpload.single('avatar')(req, res, async (err) => {
+    uploadAvatar.single('avatar')(req, res, async (err) => {
         if (err) {
             return res.status(400).json({ success: false, message: err.message || 'Upload failed' });
         }
@@ -333,13 +316,13 @@ router.post('/avatar', authMiddleware, (req, res) => {
             return res.status(400).json({ success: false, message: 'No file uploaded' });
         }
         try {
-            const avatarUrl = `/uploads/${req.file.filename}`;
+            const avatarUrl = req.file.path; // Cloudinary URL
 
-            // Delete old avatar file if it exists
+            // Delete old avatar from Cloudinary if it exists
             const oldUser = await pool.query('SELECT avatar_url FROM users WHERE id = $1', [req.user.id]);
-            if (oldUser.rows[0]?.avatar_url && oldUser.rows[0].avatar_url.startsWith('/uploads/avatar-')) {
-                const oldPath = path.join(__dirname, '..', 'public', oldUser.rows[0].avatar_url);
-                fs.unlink(oldPath, () => { });
+            const oldPublicId = getPublicIdFromUrl(oldUser.rows[0]?.avatar_url);
+            if (oldPublicId) {
+                await cloudinary.uploader.destroy(oldPublicId).catch(() => {});
             }
 
             const result = await pool.query(
