@@ -4,6 +4,7 @@ This project is production-ready for:
 - Docker on AWS EC2 (primary target)
 - Vercel frontend
 - Vercel backend (serverless compatible mode)
+- Vercel single-project deployment (frontend + backend together)
 
 ## 1) Environment Variables
 
@@ -103,6 +104,31 @@ curl http://localhost:5000/readyz
 4. Deploy.
 
 `backend/vercel.json` routes all requests to `server.js` using `@vercel/node`.
+
+---
+
+## 4.1) Deploy as a Single Vercel Project (recommended if you want one URL)
+
+This repository now includes root [`vercel.json`](vercel.json) that builds:
+- frontend from `frontend/frontend`
+- backend function from `backend/server.js`
+
+And routes:
+- `/api/*` -> backend
+- all other routes -> frontend SPA
+
+Steps:
+1. Create/import one Vercel project from repo root (`Auto-lens`).
+2. Root directory should be repository root (do not set `frontend/frontend`).
+3. Add environment variables:
+   - Backend vars from section 1 (`JWT_SECRET`, DB vars, Cloudinary, etc.)
+   - Optional frontend var:
+     - `REACT_APP_API_URL=https://<same-domain>/api`
+4. Deploy.
+
+Notes:
+- If `REACT_APP_API_URL` is not set in production, frontend falls back to same-origin `/api` automatically.
+- Keep only one active production alias for this single-project setup.
 
 ---
 
