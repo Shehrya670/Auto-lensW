@@ -1,6 +1,13 @@
 const jwt = require('jsonwebtoken');
 
 const authMiddleware = (req, res, next) => {
+    if (!process.env.JWT_SECRET) {
+        return res.status(500).json({
+            success: false,
+            message: 'Server auth configuration error'
+        });
+    }
+
     // Get token from header
     const token = req.header('x-auth-token');
 

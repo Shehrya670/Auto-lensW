@@ -1,11 +1,26 @@
 import axios from 'axios';
 
-const BASE_URL = process.env.REACT_APP_API_URL?.replace(/\/api$/, '') || 'http://localhost:5000';
+const isProduction = process.env.NODE_ENV === 'production';
+const configuredApiUrl = process.env.REACT_APP_API_URL?.trim();
+const defaultDevApiUrl = 'http://localhost:5000/api';
+const apiUrl = configuredApiUrl || (isProduction ? '/api' : defaultDevApiUrl);
 
 const api = axios.create({
-    baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
+    baseURL: apiUrl,
     withCredentials: true,
+    timeout: 15000,
 });
+
+const BASE_URL = configuredApiUrl
+    ? configuredApiUrl.replace(/\/api$/, '')
+    : (isProduction ? window.location.origin : 'http://localhost:5000');
+
+if (isProduction && !configuredApiUrl) {
+    // This supports same-origin proxy deployments and avoids localhost fallback in production.
+    // For split frontend/backend domains, set REACT_APP_API_URL in hosting provider settings.
+    // eslint-disable-next-line no-console
+    console.warn('REACT_APP_API_URL is not set; frontend will call same-origin /api');
+}
 
 // Helper: only use localStorage token if rememberMe was checked
 const getToken = () => {

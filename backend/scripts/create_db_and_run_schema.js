@@ -41,7 +41,8 @@ async function run() {
     path.resolve(__dirname, '..', 'schema.sql'),
     path.resolve(__dirname, '..', 'sql', 'schema.sql'),
     path.resolve(__dirname, '..', 'db', 'schema.sql'),
-    path.resolve(__dirname, '..', '..', 'Auto-Lens.session.sql')
+  path.resolve(__dirname, '..', '..', 'postgres.session.sql'),
+  path.resolve(__dirname, '..', '..', 'Auto-Lens.session.sql')
   ];
 
   const found = candidates.filter(f => fs.existsSync(f));
@@ -54,7 +55,11 @@ async function run() {
   // run each schema file against the new database
   const schemaPath = found[0];
   console.log('Using schema file:', schemaPath);
-  const sql = fs.readFileSync(schemaPath, 'utf8');
+  // Remove psql meta commands (e.g., "\c dbname") that pg client cannot execute
+  const sql = fs.readFileSync(schemaPath, 'utf8')
+    .split('\n')
+    .filter(line => !line.trim().startsWith('\\'))
+    .join('\n');
 
   const dbClient = new Client({ ...config, database: targetDb });
   try {

@@ -8,6 +8,13 @@ const { uploadAvatar, cloudinary, getPublicIdFromUrl } = require('../cloudinary'
 
 const { authMiddleware } = require('../middleware/auth');
 
+const getJwtConfig = () => {
+    if (!process.env.JWT_SECRET) {
+        return { ok: false, message: 'JWT_SECRET is not configured' };
+    }
+    return { ok: true, secret: process.env.JWT_SECRET, expiresIn: process.env.JWT_EXPIRE || '7d' };
+};
+
 // @route   POST api/auth/signup
 // @desc    Register a user
 // @access  Public
@@ -73,11 +80,16 @@ router.post('/signup', [
             }
         };
 
+        const jwtConfig = getJwtConfig();
+        if (!jwtConfig.ok) {
+            return res.status(500).json({ success: false, message: jwtConfig.message });
+        }
+
         // Sign token
         jwt.sign(
             payload,
-            process.env.JWT_SECRET,
-            { expiresIn: process.env.JWT_EXPIRE },
+            jwtConfig.secret,
+            { expiresIn: jwtConfig.expiresIn },
             (err, token) => {
                 if (err) throw err;
                 res.status(201).json({
@@ -168,11 +180,16 @@ router.post('/login', [
             }
         };
 
+        const jwtConfig = getJwtConfig();
+        if (!jwtConfig.ok) {
+            return res.status(500).json({ success: false, message: jwtConfig.message });
+        }
+
         // Sign token
         jwt.sign(
             payload,
-            process.env.JWT_SECRET,
-            { expiresIn: process.env.JWT_EXPIRE },
+            jwtConfig.secret,
+            { expiresIn: jwtConfig.expiresIn },
             (err, token) => {
                 if (err) throw err;
                 res.json({
