@@ -74,8 +74,7 @@ pipeline {
                 }
                 stage('Build Selenium Tests') {
                     steps {
-                        sh "docker build -t ${TEST_IMAGE}:${BUILD_NUMBER} ./selenium-tests"
-                        sh "docker tag  ${TEST_IMAGE}:${BUILD_NUMBER} ${TEST_IMAGE}:latest"
+                        echo "Skipping Docker build for tests to save disk space. Using pre-installed host browser."
                     }
                 }
             }
@@ -112,21 +111,18 @@ pipeline {
                 sh "mkdir -p selenium-tests/test-results"
 
                 sh """
-                    docker run --rm \
-                        --name selenium-runner \
-                        --network host \
-                        -e APP_URL=http://localhost:3000 \
-                        -e BACKEND_URL=http://localhost:5000 \
-                        -e CHROMEDRIVER_PATH=/usr/bin/chromedriver \
-                        -e WAIT_TIMEOUT=20 \
-                        -v \$(pwd)/selenium-tests/test-results:/app/test-results \
-                        ${TEST_IMAGE}:${BUILD_NUMBER} \
-                        pytest test_autolens.py \
-                            -v \
-                            --tb=short \
-                            --html=test-results/report.html \
-                            --self-contained-html \
-                            --junit-xml=test-results/results.xml
+                    cd selenium-tests
+                    export APP_URL=http://localhost:3000
+                    export BACKEND_URL=http://localhost:5000
+                    export CHROMEDRIVER_PATH=/usr/bin/chromedriver
+                    export WAIT_TIMEOUT=20
+                    
+                    pytest test_autolens.py \
+                        -v \
+                        --tb=short \
+                        --html=test-results/report.html \
+                        --self-contained-html \
+                        --junit-xml=test-results/results.xml
                 """
             }
             post {
