@@ -33,13 +33,31 @@ services:
       DB_NAME: auto_lens
       DB_USER: postgres
       DB_PASSWORD: postgres
-      CLIENT_URLS: http://localhost:3000,http://localhost:3001
+      CLIENT_URLS: http://localhost:3000,http://frontend:3000
     ports:
       - "5000:5000"
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5000/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Points to backend on the EC2 public IP; Jenkins overrides this via --build-arg
+        REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:5000/api}
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
 
 volumes:
   postgres_data:
-

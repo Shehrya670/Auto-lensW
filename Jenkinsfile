@@ -1,96 +1,129 @@
 pipeline {
     agent any
 
-    // ── Environment ──────────────────────────────────────────────────────────
     environment {
-        // Docker image tags
-        BACKEND_IMAGE  = "auto-lens-backend:${BUILD_NUMBER}"
-        TEST_IMAGE     = "auto-lens-selenium:${BUILD_NUMBER}"
+        // EC2 public IP — Jenkins reads this from a credential so it's not hard-coded
+        EC2_IP         = credentials('EC2_PUBLIC_IP')
 
-        // Application URLs reachable from within the Jenkins Docker network
-        APP_URL        = "http://auto-lens-frontend:3000"
-        BACKEND_URL    = "http://auto-lens-backend:5000"
+        // The API URL the React build will call at runtime
+        REACT_APP_API_URL = "http://${EC2_IP}:5000/api"
 
-        // Email: sender configured in Jenkins → Manage Jenkins → Extended E-mail
-        EMAIL_SENDER   = credentials('SMTP_SENDER_EMAIL')
+        // Docker image names
+        BACKEND_IMAGE  = "auto-lens-backend"
+        FRONTEND_IMAGE = "auto-lens-frontend"
+        TEST_IMAGE     = "auto-lens-selenium-tests"
 
-        // GitHub pusher email extracted from git log
+        // SMTP sender (set in Jenkins → Manage Jenkins → Credentials)
+        EMAIL_FROM     = credentials('SMTP_SENDER_EMAIL')
+
+        // The email of whoever pushed — populated in Checkout stage
         PUSHER_EMAIL   = ""
     }
 
-    // ── Options ──────────────────────────────────────────────────────────────
     options {
         buildDiscarder(logRotator(numToKeepStr: '10'))
-        timeout(time: 45, unit: 'MINUTES')
+        timeout(time: 60, unit: 'MINUTES')
         disableConcurrentBuilds()
+        timestamps()
     }
 
-    // ── Triggers: build on every GitHub push ─────────────────────────────────
+    // ─── Trigger: fire on every GitHub push ──────────────────────────────────
     triggers {
         githubPush()
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
     stages {
 
-        // ── Stage 1: Checkout ─────────────────────────────────────────────
+        // ── STAGE 1: Checkout ─────────────────────────────────────────────
         stage('Checkout') {
             steps {
                 checkout scm
                 script {
-                    // Capture the email of whoever pushed this commit
                     env.PUSHER_EMAIL = sh(
                         script: "git log -1 --pretty=format:'%ae'",
                         returnStdout: true
                     ).trim()
-                    echo "Build triggered by: ${env.PUSHER_EMAIL}"
-                    echo "Branch: ${env.GIT_BRANCH} | Commit: ${env.GIT_COMMIT?.take(8)}"
+                    env.GIT_SHORT = sh(
+                        script: "git rev-parse --short HEAD",
+                        returnStdout: true
+                    ).trim()
+                    echo "===== Triggered by: ${env.PUSHER_EMAIL} | Commit: ${env.GIT_SHORT} ====="
                 }
             }
         }
 
-        // ── Stage 2: Build ────────────────────────────────────────────────
+        // ── STAGE 2: Build ────────────────────────────────────────────────
         stage('Build') {
-            steps {
-                echo "Building backend Docker image: ${BACKEND_IMAGE}"
-                sh "docker build -t ${BACKEND_IMAGE} ./backend"
-                echo "Build complete."
+            parallel {
+                stage('Build Backend') {
+                    steps {
+                        sh "docker build -t ${BACKEND_IMAGE}:${BUILD_NUMBER} ./backend"
+                        sh "docker tag  ${BACKEND_IMAGE}:${BUILD_NUMBER} ${BACKEND_IMAGE}:latest"
+                    }
+                }
+                stage('Build Frontend') {
+                    steps {
+                        sh """
+                            docker build \
+                                --build-arg REACT_APP_API_URL=${REACT_APP_API_URL} \
+                                -t ${FRONTEND_IMAGE}:${BUILD_NUMBER} \
+                                ./frontend
+                            docker tag ${FRONTEND_IMAGE}:${BUILD_NUMBER} ${FRONTEND_IMAGE}:latest
+                        """
+                    }
+                }
+                stage('Build Selenium Tests') {
+                    steps {
+                        sh "docker build -t ${TEST_IMAGE}:${BUILD_NUMBER} ./selenium-tests"
+                        sh "docker tag  ${TEST_IMAGE}:${BUILD_NUMBER} ${TEST_IMAGE}:latest"
+                    }
+                }
             }
         }
 
-        // ── Stage 3: Deploy ───────────────────────────────────────────────
+        // ── STAGE 3: Deploy ───────────────────────────────────────────────
         stage('Deploy') {
             steps {
-                echo "Bringing up application stack with Docker Compose..."
                 sh """
-                    docker compose down --remove-orphans || true
-                    docker compose up -d --build
-                    echo "Waiting for services to become healthy..."
-                    sleep 30
+                    # Tear down any previous run
+                    docker compose down --remove-orphans --timeout 30 || true
+
+                    # Bring the full stack up (postgres + backend + frontend)
+                    REACT_APP_API_URL=${REACT_APP_API_URL} docker compose up -d
+
+                    echo "Waiting 45 s for all services to become healthy..."
+                    sleep 45
                 """
-                // Verify backend is alive
-                sh "curl -sf ${BACKEND_URL}/healthz || (echo 'Backend health check FAILED' && exit 1)"
-                echo "Application stack is up and healthy."
+
+                // Verify backend is alive before proceeding to tests
+                sh """
+                    curl --fail --silent --max-time 10 \
+                         http://localhost:5000/healthz \
+                    || (echo 'Backend health check FAILED' && docker compose logs backend && exit 1)
+                """
+                echo "✅ Application stack is up and healthy."
             }
         }
 
-        // ── Stage 4: Test ─────────────────────────────────────────────────
+        // ── STAGE 4: Test ─────────────────────────────────────────────────
         stage('Test') {
             steps {
-                echo "Building Selenium test Docker image: ${TEST_IMAGE}"
-                sh "docker build -t ${TEST_IMAGE} ./selenium-tests"
+                // Create output directory on the host for the report
+                sh "mkdir -p selenium-tests/test-results"
 
-                echo "Running 15 Selenium test cases in headless Chrome..."
                 sh """
                     docker run --rm \
-                        --name auto-lens-selenium-runner \
+                        --name selenium-runner \
                         --network host \
                         -e APP_URL=http://localhost:3000 \
                         -e BACKEND_URL=http://localhost:5000 \
                         -e CHROMEDRIVER_PATH=/usr/bin/chromedriver \
+                        -e WAIT_TIMEOUT=20 \
                         -v \$(pwd)/selenium-tests/test-results:/app/test-results \
-                        ${TEST_IMAGE} \
-                        pytest test_autolens.py -v --tb=short \
+                        ${TEST_IMAGE}:${BUILD_NUMBER} \
+                        pytest test_autolens.py \
+                            -v \
+                            --tb=short \
                             --html=test-results/report.html \
                             --self-contained-html \
                             --junit-xml=test-results/results.xml
@@ -98,112 +131,105 @@ pipeline {
             }
             post {
                 always {
-                    // Archive HTML report and JUnit XML for Jenkins UI
+                    // Publish HTML report in Jenkins sidebar
                     publishHTML(target: [
-                        allowMissing: false,
+                        allowMissing         : true,
                         alwaysLinkToLastBuild: true,
-                        keepAll: true,
-                        reportDir: 'selenium-tests/test-results',
-                        reportFiles: 'report.html',
-                        reportName: 'Selenium Test Report'
+                        keepAll              : true,
+                        reportDir            : 'selenium-tests/test-results',
+                        reportFiles          : 'report.html',
+                        reportName           : 'Selenium Test Report'
                     ])
+                    // Publish JUnit results in Jenkins test-result graph
                     junit(
-                        testResults: 'selenium-tests/test-results/results.xml',
-                        allowEmptyResults: true
+                        testResults       : 'selenium-tests/test-results/results.xml',
+                        allowEmptyResults  : true
                     )
                 }
             }
         }
 
-    } // end stages
+    } // ─── end stages ───────────────────────────────────────────────────────
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // Post-build: email test results to the collaborator who pushed
-    // ═════════════════════════════════════════════════════════════════════════
+    // ── POST: Email + Cleanup ─────────────────────────────────────────────────
     post {
         always {
             script {
-                def buildStatus  = currentBuild.currentResult ?: 'UNKNOWN'
-                def buildColor   = (buildStatus == 'SUCCESS') ? '#2ecc71' : '#e74c3c'
-                def statusEmoji  = (buildStatus == 'SUCCESS') ? '✅' : '❌'
-                def reportLink   = "${env.BUILD_URL}Selenium_20Test_20Report/"
-                def consoleLink  = "${env.BUILD_URL}console"
-                def commitShort  = env.GIT_COMMIT?.take(8) ?: 'N/A'
-                def branch       = env.GIT_BRANCH ?: 'N/A'
-                def pusherEmail  = env.PUSHER_EMAIL ?: 'unknown'
+                def status      = currentBuild.currentResult ?: 'UNKNOWN'
+                def passed      = status == 'SUCCESS'
+                def color       = passed ? '#16a34a' : '#dc2626'
+                def emoji       = passed ? '✅' : '❌'
+                def reportUrl   = "${env.BUILD_URL}Selenium_20Test_20Report/"
+                def consoleUrl  = "${env.BUILD_URL}console"
+                def pusher      = env.PUSHER_EMAIL ?: 'unknown'
+                def commit      = env.GIT_SHORT    ?: 'N/A'
+                def branch      = env.GIT_BRANCH   ?: 'N/A'
+                def duration    = currentBuild.durationString
 
-                def emailBody = """
+                def html = """
 <html>
-<body style="font-family: Arial, sans-serif; color: #333; max-width: 700px; margin: auto;">
-  <div style="background: ${buildColor}; padding: 20px; border-radius: 8px 8px 0 0;">
-    <h1 style="color: white; margin: 0; font-size: 22px;">
-      ${statusEmoji} Auto-Lens CI/CD Pipeline – ${buildStatus}
-    </h1>
-  </div>
-  <div style="border: 1px solid #ddd; border-top: none; padding: 24px; border-radius: 0 0 8px 8px;">
+<body style="margin:0;padding:0;font-family:Arial,sans-serif;background:#f4f4f5;">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:680px;margin:32px auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);">
+  <!-- Header -->
+  <tr><td style="background:${color};padding:28px 32px;">
+    <h1 style="margin:0;color:#fff;font-size:22px;">${emoji} Auto-Lens CI/CD &mdash; ${status}</h1>
+    <p style="margin:6px 0 0;color:rgba(255,255,255,.85);font-size:14px;">Build #${env.BUILD_NUMBER} &bull; ${branch} &bull; ${commit}</p>
+  </td></tr>
 
-    <h2 style="color: #555; border-bottom: 1px solid #eee; padding-bottom: 8px;">Build Details</h2>
-    <table style="border-collapse: collapse; width: 100%;">
-      <tr><td style="padding: 6px 12px; font-weight: bold; width: 160px;">Job</td>
-          <td style="padding: 6px 12px;">${env.JOB_NAME}</td></tr>
-      <tr style="background:#f9f9f9;"><td style="padding: 6px 12px; font-weight: bold;">Build #</td>
-          <td style="padding: 6px 12px;">${env.BUILD_NUMBER}</td></tr>
-      <tr><td style="padding: 6px 12px; font-weight: bold;">Branch</td>
-          <td style="padding: 6px 12px;">${branch}</td></tr>
-      <tr style="background:#f9f9f9;"><td style="padding: 6px 12px; font-weight: bold;">Commit</td>
-          <td style="padding: 6px 12px;">${commitShort}</td></tr>
-      <tr><td style="padding: 6px 12px; font-weight: bold;">Triggered by</td>
-          <td style="padding: 6px 12px;">${pusherEmail}</td></tr>
-      <tr style="background:#f9f9f9;"><td style="padding: 6px 12px; font-weight: bold;">Duration</td>
-          <td style="padding: 6px 12px;">${currentBuild.durationString}</td></tr>
-      <tr><td style="padding: 6px 12px; font-weight: bold;">Status</td>
-          <td style="padding: 6px 12px; font-weight: bold; color: ${buildColor};">${buildStatus}</td></tr>
+  <!-- Body -->
+  <tr><td style="padding:28px 32px;">
+    <h2 style="margin:0 0 16px;font-size:16px;color:#374151;border-bottom:1px solid #e5e7eb;padding-bottom:10px;">Build Details</h2>
+    <table cellpadding="6" cellspacing="0" width="100%" style="font-size:14px;color:#374151;">
+      <tr style="background:#f9fafb;"><td width="40%"><b>Job</b></td><td>${env.JOB_NAME}</td></tr>
+      <tr><td><b>Build #</b></td><td>${env.BUILD_NUMBER}</td></tr>
+      <tr style="background:#f9fafb;"><td><b>Branch</b></td><td>${branch}</td></tr>
+      <tr><td><b>Commit</b></td><td>${commit}</td></tr>
+      <tr style="background:#f9fafb;"><td><b>Triggered by</b></td><td>${pusher}</td></tr>
+      <tr><td><b>Duration</b></td><td>${duration}</td></tr>
+      <tr style="background:#f9fafb;"><td><b>Status</b></td><td style="color:${color};font-weight:bold;">${status}</td></tr>
     </table>
 
-    <h2 style="color: #555; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-top: 24px;">
-      Selenium Test Results (15 Test Cases)
-    </h2>
-    <p>View the full interactive HTML test report here:</p>
-    <a href="${reportLink}"
-       style="display:inline-block; background:${buildColor}; color:white;
-              padding:10px 20px; border-radius:4px; text-decoration:none; font-weight:bold;">
-      📊 Open Test Report
-    </a>
-    &nbsp;
-    <a href="${consoleLink}"
-       style="display:inline-block; background:#555; color:white;
-              padding:10px 20px; border-radius:4px; text-decoration:none; font-weight:bold;">
-      📋 Console Log
-    </a>
+    <h2 style="margin:24px 0 12px;font-size:16px;color:#374151;border-bottom:1px solid #e5e7eb;padding-bottom:10px;">Selenium Test Results</h2>
+    <p style="font-size:14px;color:#6b7280;">15 automated test cases were executed using headless Chrome inside a Docker container.</p>
 
-    <p style="margin-top: 24px; font-size: 12px; color: #999;">
-      This is an automated message from the Auto-Lens Jenkins CI/CD pipeline.<br/>
-      COMSATS University Islamabad – DevOps for Cloud Computing (Spring 2026)
+    <table cellpadding="0" cellspacing="0"><tr>
+      <td style="padding-right:12px;">
+        <a href="${reportUrl}" style="display:inline-block;background:${color};color:#fff;padding:10px 22px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:14px;">📊 View Test Report</a>
+      </td>
+      <td>
+        <a href="${consoleUrl}" style="display:inline-block;background:#4b5563;color:#fff;padding:10px 22px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:14px;">📋 Console Log</a>
+      </td>
+    </tr></table>
+  </td></tr>
+
+  <!-- Footer -->
+  <tr><td style="background:#f9fafb;padding:16px 32px;border-top:1px solid #e5e7eb;">
+    <p style="margin:0;font-size:12px;color:#9ca3af;">
+      Automated message from Auto-Lens Jenkins pipeline &bull;
+      COMSATS University Islamabad &bull; DevOps for Cloud Computing, Spring 2026
     </p>
-  </div>
+  </td></tr>
+</table>
 </body>
 </html>
 """
-                // Send to the pusher and always CC the instructor
+                // Send email to the person who pushed
                 emailext(
-                    subject: "${statusEmoji} [Auto-Lens CI] Build #${env.BUILD_NUMBER} – ${buildStatus} | Branch: ${branch}",
-                    body: emailBody,
-                    mimeType: 'text/html',
-                    to: "${pusherEmail}",
-                    from: "${env.EMAIL_SENDER}",
-                    attachLog: false,
-                    compressLog: false
+                    subject  : "${emoji} [Auto-Lens] Build #${env.BUILD_NUMBER} ${status} | ${branch} | ${commit}",
+                    body     : html,
+                    mimeType : 'text/html',
+                    to       : "${pusher}",
+                    from     : "${env.EMAIL_FROM}"
                 )
-                echo "Test result email sent to: ${pusherEmail}"
+                echo "Email sent to ${pusher}"
             }
         }
 
-        // Tear down the stack after the pipeline (instructor will re-trigger to bring up)
+        // Bring the deployment DOWN after tests  (assignment requirement)
         cleanup {
-            echo "Stopping Docker Compose stack..."
-            sh "docker compose down --remove-orphans || true"
-            sh "docker rmi ${TEST_IMAGE} || true"
-            echo "Cleanup complete. Deployment is now down (as required by assignment)."
+            sh "docker compose down --remove-orphans --timeout 30 || true"
+            sh "docker rmi ${TEST_IMAGE}:${BUILD_NUMBER} || true"
+            echo "Deployment is now DOWN. Push to bring it back up."
         }
     }
 }

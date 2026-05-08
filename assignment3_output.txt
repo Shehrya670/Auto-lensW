@@ -1,0 +1,61 @@
+COMSATS  UNIVERSITY,  ISLAMABAD  
+Department  of Computer  Science  
+Assignment  - 3, Spring  2026 
+[CLO4]:  Apply  DevOps  pipeline  automation  techniques  for code  deployment  
+Course:  DevOps for Cloud Computing                                                   Class: BCS -7 / BDS -7 / BAI -6 
+Instructor:  Qasim  Malik   Total  Marks:  10 
+ 
+ 
+Part-I: [CLO4]  Writing  automated  test cases  using  Selenium  [4] 
+Selenium is an open -source project providing a range of tools and libraries aimed at supporting browser 
+automation. There are lots of use cases that Selenium offers ranging from automated web scraping to 
+automated web testing. In this part of the assignment, you are required to use Selenium to write at least 1 5 
+automated  test cases to  test your web  application. Since  building a  web application  is out  of the scope  of this 
+course,  it can be any simple web application with the only requirement being that it uses some Database 
+Server  for storing  application’s  data. To  write  your test cases,  you are free  to use any programming  language 
+that supports Selenium’s integration. Though Selenium supports several browsers, you are required to write 
+test cases for Chrome browser. Since we are going to integrate those test cases in Jenkins pipeline, running 
+on AWS EC2, you must use headless Chrome in your test cases.  
+ 
+Part-II: [CLO4]  Creation  of an automation  pipeline  with test stage  [4+2] 
+Jenkins is an open -source automation server that helps automate various stages of the software 
+development lifecycle, including building, testing, and deploying applications. It plays a key role in enabling 
+Continuous Integration and Continuous Delivery (CI/CD). In this task, you will use Jenkins, running on an 
+AWS EC2 instance, to automate the testing phase of software development. You are required to store your 
+automated test case code in a GitHub repository. Next, you will enhance your existing Jenkins pipeline by 
+adding a test stage, extending your pipeline script to fetch the code from GitHub and execute tests in a 
+containerized environment using Docker. If you're using Java for writing test cases, you may use the pre -built 
+Docker image available at:  
+https://hub.docker.com/r/markhobson/maven -chrome/  
+which includes Chrome, Maven, JDK, and ChromeDriver. Alternatively, you can build a similar image by 
+writing your own Dockerfile  
+Upon  completion  of this assignment,  you will be able to: 
+▪ Write  automated  test cases  using  Selenium  
+▪ Create  an automation  pipeline  in Jenkins  for test stage  
+▪ Configure  and apply  Jenkins  pipeline  for running  automated  test cases in  a containerized  way 
+ 
+What  to submit  
+ 
+This is an individual assignment. Please fill out the following Google form to provide  Deployment URL along  
+with the  GitHub URLs for both the application code and test code  as well as the sender email configured in 
+the pi peline : 
+https://forms.gle/k6UV3UTqjAK3XfwLA  
+Here’s the link of the response sheet for the above google form to view your responses:  
+https://docs.google.com/spreadsheets/d/1 -oj81U0d4h5NAmZj_d -EzvZb_hZBI1PQ9sHXS9f7BDQ  
+
+You are required to submit a well -organized report that describes your application and outlines all the steps 
+undertaken in both parts, supplemented with appropriate screenshots. Please  ensure the Jenkins pipeline 
+script is included.  
+The containerized deployment must be down initially. Please add me (qasimalik@gmail.com) as a 
+collaborator to your Application’s GitHub repository so I can trigger your Jenkins pipeline to bring the 
+deployment up.  The pipeline should be configured to email the test results back to the collaborator who 
+made the push.  
+Evaluation Criteria  
+ 
+Criteria  Marks 
+A minimum of 1 5 test cases implemented using Selenium  4 
+Jenkins pipeline is triggered by a GitHub push, executes the test stage, and emails 
+test results to the collaborator who made the push  4 
+Report with screenshots and steps  2 
+ 
+ 

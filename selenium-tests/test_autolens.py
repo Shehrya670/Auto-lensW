@@ -1,7 +1,17 @@
 """
-Auto-Lens Selenium Test Suite
-Assignment 3 – DevOps for Cloud Computing
-15 automated test cases using Selenium with headless Chrome
+Auto-Lens Selenium Test Suite  –  Assignment 3
+DevOps for Cloud Computing  |  COMSATS University Islamabad  |  Spring 2026
+
+15 test cases targeting the deployed Auto-Lens React + Express application.
+Uses headless Chrome as required (AWS EC2 / Jenkins / Docker).
+
+Selectors are derived from the actual component source code:
+  - Navbar.js      : nav.navbar, .nav-logo, .nav-link, .btn-outline-nav, .btn-primary-nav
+  - Login.js       : input[name="email"], input[name="password"], .alert.alert-error
+  - Signup.js      : input[name="name"], input[name="email"], input[name="password"], .alert.alert-error
+  - CarsPage.js    : .search-box input[type="text"], .filter-select, .sort-select
+  - LandingPage.js : .hero-section, .hero-title, .hero-search, .feature-card, .footer
+  - Footer.js      : footer.footer, .footer-bottom
 """
 
 import os
@@ -12,263 +22,243 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
-# --------------------------------------------------------------------------- #
-# Configuration – override via environment variables in Jenkins / Docker
-# --------------------------------------------------------------------------- #
-BASE_URL      = os.getenv("APP_URL", "http://localhost:3000")
-BACKEND_URL   = os.getenv("BACKEND_URL", "http://localhost:5000")
-TEST_EMAIL    = os.getenv("TEST_EMAIL", "seleniumtest@autolens.com")
-TEST_PASSWORD = os.getenv("TEST_PASSWORD", "Test1234")
-TEST_NAME     = os.getenv("TEST_NAME", "Selenium Tester")
-WAIT_TIMEOUT  = int(os.getenv("WAIT_TIMEOUT", "15"))
+# ─────────────────────────────────────────────────────────────────────────────
+# Configuration — override via Jenkins environment variables
+# ─────────────────────────────────────────────────────────────────────────────
+BASE_URL      = os.getenv("APP_URL",      "http://localhost:3000")
+BACKEND_URL   = os.getenv("BACKEND_URL",  "http://localhost:5000")
+WAIT          = int(os.getenv("WAIT_TIMEOUT", "20"))
 
-# --------------------------------------------------------------------------- #
-# Shared driver fixture
-# --------------------------------------------------------------------------- #
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Shared headless Chrome driver  (module scope = one browser for all tests)
+# ─────────────────────────────────────────────────────────────────────────────
 @pytest.fixture(scope="module")
 def driver():
-    """Create a headless Chrome WebDriver instance shared across all tests."""
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--window-size=1920,1080")
-    options.add_argument("--disable-extensions")
-    options.add_argument("--remote-debugging-port=9222")
+    opts = Options()
+    opts.add_argument("--headless=new")        # Chrome 112+  headless mode
+    opts.add_argument("--no-sandbox")
+    opts.add_argument("--disable-dev-shm-usage")
+    opts.add_argument("--disable-gpu")
+    opts.add_argument("--window-size=1920,1080")
+    opts.add_argument("--disable-extensions")
+    opts.add_argument("--disable-infobars")
+    opts.add_argument("--log-level=3")         # suppress console noise
 
-    # Try system chromedriver first (set by Docker / CI), fall back to manager
-    chromedriver_path = os.getenv("CHROMEDRIVER_PATH", "/usr/bin/chromedriver")
-    if os.path.isfile(chromedriver_path):
-        service = Service(executable_path=chromedriver_path)
+    chromedriver = os.getenv("CHROMEDRIVER_PATH", "/usr/bin/chromedriver")
+    if os.path.isfile(chromedriver):
+        svc = Service(executable_path=chromedriver)
     else:
+        # Fallback: webdriver-manager (local dev)
         from webdriver_manager.chrome import ChromeDriverManager
-        service = Service(ChromeDriverManager().install())
+        svc = Service(ChromeDriverManager().install())
 
-    drv = webdriver.Chrome(service=service, options=options)
-    drv.implicitly_wait(WAIT_TIMEOUT)
+    drv = webdriver.Chrome(service=svc, options=opts)
+    drv.set_page_load_timeout(30)
     yield drv
     drv.quit()
 
 
-def wait_for(driver, by, value, timeout=WAIT_TIMEOUT):
-    """Helper: explicit wait for an element to be visible."""
+def wait_visible(driver, css, timeout=WAIT):
     return WebDriverWait(driver, timeout).until(
-        EC.visibility_of_element_located((by, value))
+        EC.visibility_of_element_located((By.CSS_SELECTOR, css))
     )
 
-
-# =========================================================================== #
-# TC-01  Landing page loads with correct title
-# =========================================================================== #
-class TestTC01_LandingPageTitle:
-    def test_landing_page_title(self, driver):
-        driver.get(BASE_URL)
-        assert "Auto" in driver.title or "Lens" in driver.title or len(driver.title) > 0, \
-            f"Unexpected page title: '{driver.title}'"
+def wait_url_contains(driver, fragment, timeout=WAIT):
+    WebDriverWait(driver, timeout).until(EC.url_contains(fragment))
 
 
-# =========================================================================== #
-# TC-02  Landing page contains a navigation bar
-# =========================================================================== #
-class TestTC02_NavbarPresent:
-    def test_navbar_is_present(self, driver):
-        driver.get(BASE_URL)
-        nav = driver.find_element(By.TAG_NAME, "nav")
-        assert nav.is_displayed(), "Navigation bar is not visible on the landing page"
+# ═════════════════════════════════════════════════════════════════════════════
+# TC-01  Landing page loads and returns HTTP 200 (page source non-empty)
+# ═════════════════════════════════════════════════════════════════════════════
+def test_01_landing_page_loads(driver):
+    """Landing page must load without errors."""
+    driver.get(BASE_URL)
+    assert len(driver.page_source) > 500, "Landing page source is too short — may have failed to load"
 
 
-# =========================================================================== #
-# TC-03  Navigation to /cars page works
-# =========================================================================== #
-class TestTC03_NavigateToCarsPage:
-    def test_navigate_to_cars(self, driver):
-        driver.get(f"{BASE_URL}/cars")
-        assert "/cars" in driver.current_url, \
-            f"Expected /cars in URL, got: {driver.current_url}"
+# ═════════════════════════════════════════════════════════════════════════════
+# TC-02  Page title contains 'Auto Lens'
+# ═════════════════════════════════════════════════════════════════════════════
+def test_02_page_title(driver):
+    """Browser tab title must identify the application."""
+    driver.get(BASE_URL)
+    # React sets document.title; wait up to WAIT seconds for it
+    WebDriverWait(driver, WAIT).until(lambda d: len(d.title) > 0)
+    assert "auto" in driver.title.lower() or "lens" in driver.title.lower(), \
+        f"Unexpected title: '{driver.title}'"
 
 
-# =========================================================================== #
-# TC-04  Cars page contains a search or filter input
-# =========================================================================== #
-class TestTC04_CarsPageHasSearch:
-    def test_cars_page_search_input_exists(self, driver):
-        driver.get(f"{BASE_URL}/cars")
-        found = False
-        for selector in ["input[type='text']", "input[type='search']", "input[placeholder]"]:
-            try:
-                el = driver.find_element(By.CSS_SELECTOR, selector)
-                if el.is_displayed():
-                    found = True
-                    break
-            except NoSuchElementException:
-                continue
-        assert found, "No visible search/filter input found on /cars page"
+# ═════════════════════════════════════════════════════════════════════════════
+# TC-03  Navbar is rendered and visible
+# ═════════════════════════════════════════════════════════════════════════════
+def test_03_navbar_visible(driver):
+    """nav.navbar element must be displayed on the landing page."""
+    driver.get(BASE_URL)
+    nav = wait_visible(driver, "nav.navbar")
+    assert nav.is_displayed()
 
 
-# =========================================================================== #
-# TC-05  Navigation to /signup page works
-# =========================================================================== #
-class TestTC05_NavigateToSignup:
-    def test_navigate_to_signup(self, driver):
-        driver.get(f"{BASE_URL}/signup")
-        assert "/signup" in driver.current_url, \
-            f"Expected /signup in URL, got: {driver.current_url}"
+# ═════════════════════════════════════════════════════════════════════════════
+# TC-04  Navbar contains 'Auto Lens' brand text
+# ═════════════════════════════════════════════════════════════════════════════
+def test_04_navbar_brand(driver):
+    """The .nav-logo element must contain the brand name."""
+    driver.get(BASE_URL)
+    logo = wait_visible(driver, ".nav-logo")
+    assert "auto lens" in logo.text.lower(), \
+        f"Brand text not found. Got: '{logo.text}'"
 
 
-# =========================================================================== #
-# TC-06  Signup page has required form fields
-# =========================================================================== #
-class TestTC06_SignupFormFields:
-    def test_signup_form_has_required_fields(self, driver):
-        driver.get(f"{BASE_URL}/signup")
-        page_src = driver.page_source.lower()
-        assert "email" in page_src, "Email field not found on signup page"
-        assert "password" in page_src, "Password field not found on signup page"
+# ═════════════════════════════════════════════════════════════════════════════
+# TC-05  Hero section is rendered on the guest landing page
+# ═════════════════════════════════════════════════════════════════════════════
+def test_05_hero_section_present(driver):
+    """Unauthenticated landing must show the hero section."""
+    # Clear auth so we're definitely on the guest view
+    driver.get(BASE_URL)
+    driver.execute_script("localStorage.clear(); sessionStorage.clear();")
+    driver.get(BASE_URL)
+    hero = wait_visible(driver, ".hero-section")
+    assert hero.is_displayed()
 
 
-# =========================================================================== #
-# TC-07  Signup with invalid email shows validation error
-# =========================================================================== #
-class TestTC07_SignupInvalidEmail:
-    def test_signup_invalid_email_validation(self, driver):
-        driver.get(f"{BASE_URL}/signup")
-        try:
-            email_input = driver.find_element(By.CSS_SELECTOR, "input[type='email'], input[name='email']")
-            email_input.clear()
-            email_input.send_keys("not-an-email")
-
-            submit = driver.find_element(By.CSS_SELECTOR, "button[type='submit'], input[type='submit']")
-            submit.click()
-            time.sleep(1)
-
-            # Either HTML5 validation fires (invalid) or an error message appears
-            is_invalid = driver.execute_script(
-                "return document.querySelector('input[type=\"email\"]')?.validity?.valid === false"
-            )
-            error_in_page = any(word in driver.page_source.lower()
-                                for word in ["invalid", "valid email", "error"])
-            assert is_invalid or error_in_page, \
-                "No validation error shown for invalid email on signup"
-        except NoSuchElementException as e:
-            pytest.skip(f"Signup email input not found: {e}")
+# ═════════════════════════════════════════════════════════════════════════════
+# TC-06  Hero search input is functional
+# ═════════════════════════════════════════════════════════════════════════════
+def test_06_hero_search_input(driver):
+    """The hero search box must accept keyboard input."""
+    driver.get(BASE_URL)
+    driver.execute_script("localStorage.clear(); sessionStorage.clear();")
+    driver.get(BASE_URL)
+    inp = wait_visible(driver, ".hero-search-box input[type='text']")
+    inp.clear()
+    inp.send_keys("Toyota")
+    assert inp.get_attribute("value") == "Toyota", \
+        "Hero search input did not retain typed value"
 
 
-# =========================================================================== #
-# TC-08  Navigation to /login page works
-# =========================================================================== #
-class TestTC08_NavigateToLogin:
-    def test_navigate_to_login(self, driver):
-        driver.get(f"{BASE_URL}/login")
-        assert "/login" in driver.current_url, \
-            f"Expected /login in URL, got: {driver.current_url}"
+# ═════════════════════════════════════════════════════════════════════════════
+# TC-07  Footer is present and contains copyright text
+# ═════════════════════════════════════════════════════════════════════════════
+def test_07_footer_present(driver):
+    """footer.footer must be present and show the copyright notice."""
+    driver.get(BASE_URL)
+    driver.execute_script("localStorage.clear(); sessionStorage.clear();")
+    driver.get(BASE_URL)
+    footer = wait_visible(driver, "footer.footer")
+    footer_text = footer.text.lower()
+    assert "auto lens" in footer_text or "©" in footer_text or "copyright" in footer_text, \
+        f"Footer does not contain expected text. Got: '{footer.text[:100]}'"
 
 
-# =========================================================================== #
-# TC-09  Login page has email and password fields
-# =========================================================================== #
-class TestTC09_LoginPageFields:
-    def test_login_page_has_fields(self, driver):
-        driver.get(f"{BASE_URL}/login")
-        page_src = driver.page_source.lower()
-        assert "email" in page_src, "Email field not found on login page"
-        assert "password" in page_src, "Password field not found on login page"
+# ═════════════════════════════════════════════════════════════════════════════
+# TC-08  Navbar 'Browse Cars' link navigates to /cars
+# ═════════════════════════════════════════════════════════════════════════════
+def test_08_navbar_browse_cars_link(driver):
+    """Clicking 'Browse Cars' in the navbar must navigate to /cars."""
+    driver.get(BASE_URL)
+    link = wait_visible(driver, "a.nav-link[href='/cars']")
+    link.click()
+    wait_url_contains(driver, "/cars")
+    assert "/cars" in driver.current_url
 
 
-# =========================================================================== #
-# TC-10  Login with wrong credentials shows an error
-# =========================================================================== #
-class TestTC10_LoginInvalidCredentials:
-    def test_login_invalid_credentials(self, driver):
-        driver.get(f"{BASE_URL}/login")
-        try:
-            email_input = driver.find_element(By.CSS_SELECTOR, "input[type='email'], input[name='email']")
-            email_input.clear()
-            email_input.send_keys("wrong@example.com")
-
-            pass_input = driver.find_element(By.CSS_SELECTOR, "input[type='password']")
-            pass_input.clear()
-            pass_input.send_keys("WrongPass99")
-
-            submit = driver.find_element(By.CSS_SELECTOR, "button[type='submit'], input[type='submit']")
-            submit.click()
-            time.sleep(2)
-
-            error_keywords = ["invalid", "incorrect", "error", "failed", "credentials"]
-            found_error = any(kw in driver.page_source.lower() for kw in error_keywords)
-            assert found_error, "No error shown for invalid login credentials"
-        except NoSuchElementException as e:
-            pytest.skip(f"Login form element not found: {e}")
+# ═════════════════════════════════════════════════════════════════════════════
+# TC-09  Cars page renders the search toolbar
+# ═════════════════════════════════════════════════════════════════════════════
+def test_09_cars_page_search_toolbar(driver):
+    """The .search-box input on /cars must be visible."""
+    driver.get(f"{BASE_URL}/cars")
+    search = wait_visible(driver, ".search-box input[type='text']")
+    assert search.is_displayed()
 
 
-# =========================================================================== #
-# TC-11  Backend health endpoint returns OK
-# =========================================================================== #
-class TestTC11_BackendHealthCheck:
-    def test_backend_health_endpoint(self, driver):
-        driver.get(f"{BACKEND_URL}/healthz")
-        assert "ok" in driver.page_source.lower() or "auto-lens" in driver.page_source.lower(), \
-            f"Health endpoint did not return expected response: {driver.page_source[:200]}"
+# ═════════════════════════════════════════════════════════════════════════════
+# TC-10  Cars page Make filter (select) is present
+# ═════════════════════════════════════════════════════════════════════════════
+def test_10_cars_page_make_filter(driver):
+    """The Make <select> filter on /cars sidebar must be present."""
+    driver.get(f"{BASE_URL}/cars")
+    sel = wait_visible(driver, "select.filter-select[name='make']")
+    assert sel.is_displayed()
+    # Verify it has options beyond the default
+    opts = sel.find_elements(By.TAG_NAME, "option")
+    assert len(opts) > 5, f"Expected >5 make options, got {len(opts)}"
 
 
-# =========================================================================== #
-# TC-12  Backend root API returns version info
-# =========================================================================== #
-class TestTC12_BackendRootResponse:
-    def test_backend_root_returns_json(self, driver):
-        driver.get(f"{BACKEND_URL}/")
-        src = driver.page_source.lower()
-        assert "auto lens" in src or "version" in src or "api" in src, \
-            f"Backend root did not return expected JSON info: {driver.page_source[:200]}"
+# ═════════════════════════════════════════════════════════════════════════════
+# TC-11  Login page has email and password inputs with correct name attributes
+# ═════════════════════════════════════════════════════════════════════════════
+def test_11_login_form_fields(driver):
+    """Login form must have email and password inputs."""
+    driver.get(f"{BASE_URL}/login")
+    email_input = wait_visible(driver, "input[name='email'][type='email']")
+    pwd_input   = wait_visible(driver, "input[name='password']")
+    assert email_input.is_displayed()
+    assert pwd_input.is_displayed()
 
 
-# =========================================================================== #
-# TC-13  /api/cars returns a list (JSON)
-# =========================================================================== #
-class TestTC13_CarListingAPIEndpoint:
-    def test_cars_api_endpoint_accessible(self, driver):
-        driver.get(f"{BACKEND_URL}/api/cars")
-        src = driver.page_source
-        # Expect either a list of cars or an empty success response
-        assert "success" in src.lower() or "cars" in src.lower(), \
-            f"/api/cars did not return expected JSON: {src[:200]}"
+# ═════════════════════════════════════════════════════════════════════════════
+# TC-12  Login with wrong credentials shows .alert.alert-error
+# ═════════════════════════════════════════════════════════════════════════════
+def test_12_login_invalid_credentials(driver):
+    """Submitting wrong credentials must render .alert.alert-error."""
+    driver.get(f"{BASE_URL}/login")
+    driver.find_element(By.CSS_SELECTOR, "input[name='email']").send_keys("wrong@test.com")
+    driver.find_element(By.CSS_SELECTOR, "input[name='password']").send_keys("WrongPass99")
+    driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
+    # Wait for the error alert to appear
+    err = WebDriverWait(driver, WAIT).until(
+        EC.visibility_of_element_located((By.CSS_SELECTOR, ".alert.alert-error"))
+    )
+    assert err.is_displayed(), "Error alert not shown after invalid login"
+    assert len(err.text.strip()) > 0, "Error alert is empty"
 
 
-# =========================================================================== #
-# TC-14  Accessing a protected page (/sell) while logged out redirects to login
-# =========================================================================== #
-class TestTC14_ProtectedRouteRedirect:
-    def test_sell_page_redirects_unauthenticated_user(self, driver):
-        # Clear any existing session
-        driver.get(BASE_URL)
-        driver.execute_script("window.localStorage.clear(); window.sessionStorage.clear();")
-        driver.delete_all_cookies()
-
-        driver.get(f"{BASE_URL}/sell")
-        time.sleep(2)
-
-        # Should either redirect to /login or show a login prompt
-        is_redirected = "/login" in driver.current_url
-        has_login_text = "login" in driver.page_source.lower() or "sign in" in driver.page_source.lower()
-        assert is_redirected or has_login_text, \
-            f"Protected /sell page accessible without auth. URL: {driver.current_url}"
+# ═════════════════════════════════════════════════════════════════════════════
+# TC-13  Signup page has all required fields (name, email, password)
+# ═════════════════════════════════════════════════════════════════════════════
+def test_13_signup_form_fields(driver):
+    """Signup form must have name, email, and password inputs."""
+    driver.get(f"{BASE_URL}/signup")
+    name_input  = wait_visible(driver, "input[name='name'][type='text']")
+    email_input = wait_visible(driver, "input[name='email'][type='email']")
+    pwd_input   = wait_visible(driver, "input[name='password']")
+    assert name_input.is_displayed()
+    assert email_input.is_displayed()
+    assert pwd_input.is_displayed()
 
 
-# =========================================================================== #
-# TC-15  Footer is present on the landing page
-# =========================================================================== #
-class TestTC15_FooterPresent:
-    def test_footer_is_present(self, driver):
-        driver.get(BASE_URL)
-        try:
-            footer = driver.find_element(By.TAG_NAME, "footer")
-            assert footer.is_displayed(), "Footer element exists but is not visible"
-        except NoSuchElementException:
-            # Some SPAs use div.footer — check by class or text
-            page_src = driver.page_source.lower()
-            assert "footer" in page_src or "©" in page_src or "copyright" in page_src, \
-                "No footer found on the landing page"
+# ═════════════════════════════════════════════════════════════════════════════
+# TC-14  Accessing /sell while logged out redirects to /login
+# ═════════════════════════════════════════════════════════════════════════════
+def test_14_protected_sell_route_redirect(driver):
+    """/sell must redirect unauthenticated users to /login."""
+    # Ensure no session exists
+    driver.get(BASE_URL)
+    driver.execute_script("localStorage.clear(); sessionStorage.clear();")
+    driver.delete_all_cookies()
+
+    driver.get(f"{BASE_URL}/sell")
+    time.sleep(3)   # allow React Router to process redirect
+
+    is_on_login = "/login" in driver.current_url
+    has_login_form = len(driver.find_elements(By.CSS_SELECTOR, "input[name='email']")) > 0
+    assert is_on_login or has_login_form, \
+        f"Expected redirect to /login, but URL is: {driver.current_url}"
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# TC-15  Backend /healthz endpoint returns { status: 'ok' }
+# ═════════════════════════════════════════════════════════════════════════════
+def test_15_backend_health_endpoint(driver):
+    """GET /healthz must return a response containing 'ok'."""
+    driver.get(f"{BACKEND_URL}/healthz")
+    src = driver.page_source.lower()
+    assert "ok" in src, \
+        f"/healthz did not return expected 'ok'. Got: {driver.page_source[:300]}"
