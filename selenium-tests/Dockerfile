@@ -1,22 +1,24 @@
-FROM selenium/standalone-chrome:latest
+FROM python:3.10-slim
 
-USER root
+# Avoid prompts from apt during build
+ENV DEBIAN_FRONTEND=noninteractive
 
-# Install Python and pip
-RUN apt-get update && apt-get install -y python3 python3-pip python3-venv && rm -rf /var/lib/apt/lists/*
+# ── Install Chromium and ChromeDriver ─────────────────────────────────────────
+RUN apt-get update -qq \
+    && apt-get install -y --no-install-recommends \
+       chromium \
+       chromium-driver \
+    && rm -rf /var/lib/apt/lists/*
 
+# ── Python dependencies ────────────────────────────────────────────────────────
 WORKDIR /app
-
-# Copy requirements
 COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Create a virtual environment and install dependencies
-RUN python3 -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-RUN pip3 install --no-cache-dir -r requirements.txt
-
-# Copy tests
+# ── Application code ───────────────────────────────────────────────────────────
 COPY . .
 
-# Run pytest
+# Set webdriver-manager environment variables to use system chromium if necessary
+ENV CHROME_EXECUTABLE_PATH=/usr/bin/chromium
+
 CMD ["pytest", "test_autolens.py", "-v", "--html=report.html", "--self-contained-html"]
