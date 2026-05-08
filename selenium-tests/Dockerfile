@@ -31,16 +31,8 @@ RUN CHROME_VER=$(google-chrome --version | grep -oP '\d+' | head -1) \
     && echo "Chrome major version: ${CHROME_VER}" \
     && DRIVER_URL=$(curl -fsSL \
          "https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json" \
-         | python3 -c "
-import sys, json
-data = json.load(sys.stdin)
-major = '${CHROME_VER}'
-# Find latest entry whose version starts with our major
-matches = [v for v in data['versions'] if v['version'].startswith(major + '.')]
-entry   = matches[-1] if matches else data['versions'][-1]
-drivers = [d for d in entry['downloads'].get('chromedriver', []) if d['platform'] == 'linux64']
-print(drivers[0]['url'] if drivers else '')
-") \
+         | python3 -c "import sys, json; data = json.load(sys.stdin); major = '${CHROME_VER}'; matches = [v for v in data['versions'] if v['version'].startswith(major + '.')]; entry = matches[-1] if matches else data['versions'][-1]; drivers = [d for d in entry['downloads'].get('chromedriver', []) if d['platform'] == 'linux64']; print(drivers[0]['url'] if drivers else '')") \
+
     && echo "ChromeDriver URL: ${DRIVER_URL}" \
     && if [ -n "${DRIVER_URL}" ]; then \
          wget -q -O /tmp/chromedriver.zip "${DRIVER_URL}" \
