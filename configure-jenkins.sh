@@ -76,7 +76,7 @@ curl -sf -u "$JENKINS_USER:$JENKINS_PASS" \
       </branches>
     </scm>
     <scriptPath>Jenkinsfile</scriptPath>
-    <lightweight>true</lightweight>
+    <lightweight>false</lightweight>
   </definition>
 </flow-definition>' \
   "$JENKINS_URL/createItem?name=Assignment3-Pipeline" \

@@ -148,7 +148,7 @@ cat > /tmp/job-config.xml << XML
       </branches>
     </scm>
     <scriptPath>Jenkinsfile</scriptPath>
-    <lightweight>true</lightweight>
+    <lightweight>false</lightweight>
   </definition>
 </flow-definition>
 XML
