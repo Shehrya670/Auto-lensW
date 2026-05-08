@@ -1,0 +1,85 @@
+// ============================================================
+// Assignment 2 – Jenkins Pipeline (Build Stage)
+// Triggered by GitHub push → fetches code → builds Docker images
+// Deployment starts DOWN; instructor push brings it UP
+// ============================================================
+pipeline {
+    agent any
+
+    environment {
+        EC2_IP    = credentials('EC2_PUBLIC_IP')
+        APP_DIR   = "/home/ubuntu/Auto-lensW"
+    }
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '5'))
+        timeout(time: 30, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        timestamps()
+    }
+
+    triggers {
+        githubPush()
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script {
+                    env.GIT_SHORT = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+                    echo "Build triggered — commit: ${env.GIT_SHORT}, branch: ${env.GIT_BRANCH}"
+                }
+            }
+        }
+
+        stage('Build Images') {
+            parallel {
+                stage('Build Backend') {
+                    steps {
+                        sh "docker build -t auto-lens-backend:${BUILD_NUMBER} ./backend"
+                        sh "docker tag auto-lens-backend:${BUILD_NUMBER} auto-lens-backend:latest"
+                    }
+                }
+                stage('Build Frontend') {
+                    steps {
+                        sh """
+                            docker build \
+                              --build-arg REACT_APP_API_URL=http://${EC2_IP}:5000/api \
+                              -t auto-lens-frontend:${BUILD_NUMBER} \
+                              ./frontend
+                            docker tag auto-lens-frontend:${BUILD_NUMBER} auto-lens-frontend:latest
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                sh """
+                    docker compose down --remove-orphans --timeout 20 || true
+                    REACT_APP_API_URL=http://${EC2_IP}:5000/api docker compose up -d
+                    sleep 40
+                    curl --fail --silent http://localhost:5000/healthz \
+                      || (docker compose logs backend && exit 1)
+                """
+                echo "✅ Application is UP — http://${EC2_IP}:3000"
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Build #${BUILD_NUMBER} succeeded. App running at http://${EC2_IP}:3000"
+        }
+        failure {
+            echo "Build #${BUILD_NUMBER} FAILED. Check console log."
+            sh "docker compose logs --tail=50 || true"
+        }
+        cleanup {
+            sh "docker image prune -f || true"
+        }
+    }
+}

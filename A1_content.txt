@@ -1,0 +1,66 @@
+COMSATS UNIVERSITY  ISLAMABAD , ISLAMABAD CAM PUS 
+Department of Computer Science  
+Assignment  - 1, Spring 2026 
+[CLO1]:  Characterize the fundamentals of cloud computing along with its service models  
+[CLO 2]: Enumerate virtualization and containerization  techniques used in cloud  computing  
+Course: DevOps  for Cloud Computing                                                     Class: BCS -7/ BDS -7/ BAI -6 
+Submission Deadline: March  13, 202 6                    Total Marks: 10  
+1- [CLO1 , CLO2 ] Amazon Web Services (AWS) is a Public Cloud Platform and is currently the market leader  
+based on various survey s conducted recently . It offers around  200 products and services. In this 
+assignment, you are going to get the flavor of using Cloud Computing Platform and its various service 
+models.  Specifically, you are required to build or reuse any previously built web application and deploy it 
+over the Public Cloud , AWS . Since building web applications  is out of the scope of this course,  it can be 
+any web application with the following requirement s: 
+▪ It has sufficient  functionality ( ≈ 3 FYP level modules) so that a  handsome amount of test cases ( ≈ 
+15) can be written in the upcoming assignment  
+▪ It uses some Database Server for managing  application’s data.  
+You are required to deploy the web application using the following IaaS and PaaS based services offered 
+by AWS:  
+▪ Amazon Elastic Compute Cloud (Amazon EC2) : An IaaS based service offering the broadest and 
+deepest compute platform  
+▪ Amazon Simple Storage Service (Amazon S3) : An IaaS based object storage service  
+▪ AWS Elastic Beanstalk : A PaaS based service for easy d eploy ments  of web applications  
+▪ Amazon Relational Database  (Amazon RDS ): A PaaS based service that allows the creation, 
+operation, management, and scaling of the relational database in the cloud  
+Upon completion of this assignment , you will be able to:  
+▪ Characterize and understand the service models  
+▪ Understand and c onfigure servers and applications using virtuali zed infrastructure  
+▪ Configure and deploy application using  Infrastructure as a Service (IaaS) model  in the cloud  
+▪ Setup  and deploy application using Platform as a Service (PaaS) model in the cloud  
+Part-I 
+In the first part, you will deploy the application using IaaS model and will use EC2 for it.  Roughly, the 
+following  steps would be needed for the deployment:   
+▪ Create an Ubuntu based virtual machine, an EC2 instance  
+▪ Add security rules to EC2 instance allowing various accesses (e.g., SSH, HTTP  etc.)  
+▪ Generate keys pair and use an SSH client to access the EC2 instance . 
+▪ Use package manager to install the required s ervers  along with their dependencies  and start them  
+▪ Configure the permissions  
+▪ Set up  the Schema and u pload your application code , and finally, make your web application  up 
+and running   
+ 
+ 
+ 
+Part-II 
+In the second part, you will deploy the application using PaaS model and will use S3 to store the application 
+code and Elastic Beanstalk  to easily setup the environment for your application . If your application uses a 
+Relational Database, you may also need to set up  an RDS instance.  
+What to submit  
+This is an individual assignment. Please fill out the following Google form to provide URLs for both the 
+Parts:  
+https://forms.gle/jCj9sQxybnURKA3S7  
+ 
+      Here’s the link of the response sheet for the above google form to view your responses:  
+https://docs.google.com/spreadsheets/d/1yRFY3ap1MvT9iA9TSxmI1iwdtobUm1eSb24TGQEbTwM/edit
+?usp=sharing  
+You are also required  to submit a well formatted  report describing your application , documen ting all the 
+micro steps  along with the screenshots, and listing URLs  for both the parts that can be  used to access 
+your deployed web application . The report should serve as a manual for someone who wants to deploy 
+the application using EC2 and E lastic Beanstalk . 
+   
+   Evaluation Criteria  
+ 
+Criteria  Marks  
+Application deployed successfully over EC2 and is up and running  4 
+Application deployed successfully over Elastic Beanstalk and is up and running  4 
+Report with screenshots and steps  2 
+ 
