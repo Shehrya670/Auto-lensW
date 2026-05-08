@@ -49,7 +49,7 @@ if ! command -v jenkins &>/dev/null; then
     https://pkg.jenkins.io/debian-stable binary/" \
     | sudo tee /etc/apt/sources.list.d/jenkins.list > /dev/null
   sudo apt-get update -y
-  sudo apt-get install -y fontconfig openjdk-17-jre jenkins
+  sudo apt-get install -y fontconfig openjdk-21-jre jenkins
   sudo systemctl enable jenkins
   sudo systemctl start jenkins
   # Allow jenkins user to run docker
