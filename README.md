@@ -39,3 +39,4 @@ The Selenium test suite (`selenium-tests/`) includes 15 test cases:
 
 ---
 *Developed for DevOps for Cloud Computing Assignments.*
+*Last updated: 2026-05-09*
