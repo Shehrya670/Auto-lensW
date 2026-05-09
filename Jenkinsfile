@@ -215,7 +215,7 @@ pipeline {
                     body     : html,
                     mimeType : 'text/html',
                     to       : "shehryarkhalil65@gmail.com, qasimmalik@gmail.com",
-                    from     : "shehryarahmadkhalil055gmail.com"
+                    from     : "shehryarahmadkhalil055@gmail.com"
                 )
                 echo "Email sent to ${pusher}"
             }
