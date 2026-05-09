@@ -97,7 +97,7 @@ pipeline {
                 // Verify backend is alive before proceeding to tests
                 sh """
                     curl --fail --silent --max-time 10 \
-                         http://backend:5000/healthz \
+                         http://${EC2_IP}:5000/healthz \
                     || (echo 'Backend health check FAILED' && docker compose logs backend && exit 1)
                 """
                 echo "✅ Application stack is up and healthy."
