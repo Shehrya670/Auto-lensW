@@ -112,8 +112,8 @@ pipeline {
 
                 sh """
                     cd selenium-tests
-                    export APP_URL=http://localhost:3000
-                    export BACKEND_URL=http://localhost:5000
+                    export APP_URL=http://${EC2_IP}:3000
+                    export BACKEND_URL=http://${EC2_IP}:5000
                     export CHROMEDRIVER_PATH=/usr/bin/chromedriver
                     export WAIT_TIMEOUT=20
                     
