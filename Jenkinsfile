@@ -85,7 +85,7 @@ pipeline {
             steps {
                 sh """
                     # Tear down any previous run
-                    docker compose down --remove-orphans --timeout 30 || true
+                    # docker compose down --remove-orphans --timeout 30 || true
 
                     # Bring the full stack up (postgres + backend + frontend)
                     REACT_APP_API_URL=${REACT_APP_API_URL} docker compose up -d
@@ -223,7 +223,7 @@ pipeline {
 
         // Bring the deployment DOWN after tests  (assignment requirement)
         cleanup {
-            sh "docker compose down --remove-orphans --timeout 30 || true"
+            sh "# docker compose down --remove-orphans --timeout 30 || true"
             sh "docker rmi ${TEST_IMAGE}:${BUILD_NUMBER} || true"
             echo "Deployment is now DOWN. Push to bring it back up."
         }
