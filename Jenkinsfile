@@ -214,8 +214,8 @@ pipeline {
                     subject  : "${emoji} [Auto-Lens] Build #${env.BUILD_NUMBER} ${status} | ${branch} | ${commit}",
                     body     : html,
                     mimeType : 'text/html',
-                    to       : "shehryarahmadkhalil055@gmail.com",
-                    from     : "${env.EMAIL_FROM}"
+                    to       : "shehryarahmadkhalil055@gmail.com","qasimmalik@gmail.com"
+                    from     : "shehryarkhalil65@gmail.com"
                 )
                 echo "Email sent to ${pusher}"
             }
