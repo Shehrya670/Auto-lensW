@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: auto-lens-backend:latest
+          image: shehryar670/auto-lens-backend:latest
           imagePullPolicy: IfNotPresent
           resources:
             requests:
